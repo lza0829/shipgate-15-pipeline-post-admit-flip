@@ -1,7 +1,7 @@
 from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from app.db import db, rows_to_list, row_to_dict
+from app.db import POST_ADMIT_STATUSES, db, db_immediate, rows_to_list, row_to_dict
 from app.services.common import (
     RELEASE_SELECT,
     assert_app_enabled,
@@ -89,13 +89,20 @@ def admit(release_id: int):
             raise HTTPException(400, "同应用已有在途发版单，禁止并行入闸")
         test = conn.execute("SELECT id FROM environments WHERE code='测'").fetchone()
         now = now_str()
+        # 入闸快照：以入闸当时的流水线结论作数，冻结标此时必须为 0
         conn.execute(
             """
-            UPDATE releases SET status='已入闸', admitted_at=?, current_env_id=? WHERE id=?
+            UPDATE releases
+            SET status='已入闸', admitted_at=?, current_env_id=?,
+                pipeline_snapshot_at_admit=?, frozen=0, red_after_admit_at=NULL
+            WHERE id=?
             """,
-            (now, test["id"], release_id),
+            (now, test["id"], r["pipeline_status"], release_id),
         )
-        audit(conn, "发版单", release_id, "入闸", r["serial"])
+        audit(
+            conn, "发版单", release_id, "入闸",
+            f"{r['serial']} 入闸快照流水线={r['pipeline_status']}",
+        )
         return row_to_dict(get_release(conn, release_id))
 
 
@@ -103,13 +110,52 @@ def admit(release_id: int):
 def set_pipeline(release_id: int, body: PipelineIn):
     if body.流水线 not in ("未回执", "绿", "红"):
         raise HTTPException(400, "流水线状态非法")
-    with db() as conn:
+    # 写口取写锁：与晋升写口互斥，并发翻红/晋升只有一个结局
+    with db_immediate() as conn:
         r = conn.execute("SELECT * FROM releases WHERE id=?", (release_id,)).fetchone()
         if not r:
             raise HTTPException(404, "发版单不存在")
-        conn.execute(
-            "UPDATE releases SET pipeline_status=? WHERE id=?",
-            (body.流水线, release_id),
-        )
-        audit(conn, "发版单", release_id, "流水线回执", body.流水线)
+        now = now_str()
+        if r["status"] not in POST_ADMIT_STATUSES:
+            # 入闸前的红绿只影响入闸当下红绿闸（另立），不产生冻结
+            conn.execute(
+                "UPDATE releases SET pipeline_status=? WHERE id=?",
+                (body.流水线, release_id),
+            )
+            audit(conn, "发版单", release_id, "流水线回执", body.流水线)
+            return row_to_dict(get_release(conn, release_id))
+
+        # —— 入闸后：翻红即冻结（臂一，fail-closed）——
+        if body.流水线 == "红":
+            already_frozen = bool(r["frozen"])
+            # 冻结标粘性：首次翻红记录时间戳；重复翻红不覆盖首次时间
+            conn.execute(
+                """
+                UPDATE releases
+                SET pipeline_status='红', frozen=1,
+                    red_after_admit_at=COALESCE(red_after_admit_at, ?)
+                WHERE id=?
+                """,
+                (now, release_id),
+            )
+            if already_frozen:
+                audit(conn, "发版单", release_id, "入闸后翻红", f"重复翻红维持冻结@{now}")
+            else:
+                audit(
+                    conn, "发版单", release_id, "入闸后翻红",
+                    f"事后翻红冻结@{now}，入闸快照={r['pipeline_snapshot_at_admit']}",
+                )
+        else:
+            # 翻绿/未回执只改流水线灯色；冻结标粘性，不因翻绿而解除
+            conn.execute(
+                "UPDATE releases SET pipeline_status=? WHERE id=?",
+                (body.流水线, release_id),
+            )
+            if r["frozen"]:
+                audit(
+                    conn, "发版单", release_id, "流水线回执",
+                    f"{body.流水线}（冻结维持，不得向更高环境推进）",
+                )
+            else:
+                audit(conn, "发版单", release_id, "流水线回执", body.流水线)
         return row_to_dict(get_release(conn, release_id))

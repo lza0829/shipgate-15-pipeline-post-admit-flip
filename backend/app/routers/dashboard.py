@@ -14,10 +14,15 @@ def overview():
             counts[name] = conn.execute(
                 "SELECT COUNT(*) AS c FROM releases WHERE status=?", (name,)
             ).fetchone()["c"]
+        # 冻结数：入闸后翻红被冻结、仍在途/已落地但不得再向更高环境推进的单
+        frozen_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM releases WHERE frozen=1"
+        ).fetchone()["c"]
+        # 在途保留冻结单（不再因翻红从总览消失），冻结由行内冻结标露出
         active = rows_to_list(
             conn.execute(
                 RELEASE_SELECT
-                + " WHERE r.status IN ('已入闸','晋升中','已放行','回滚中') ORDER BY r.id DESC"
+                + " WHERE r.status IN ('已入闸','晋升中','已放行','回滚中') ORDER BY r.frozen DESC, r.id DESC"
             ).fetchall()
         )
         versions = rows_to_list(
@@ -44,4 +49,4 @@ def overview():
                 """
             ).fetchall()
         )
-        return {"分布": counts, "在途": active, "环境版本": versions, "实例": health}
+        return {"分布": counts, "冻结数": frozen_count, "在途": active, "环境版本": versions, "实例": health}

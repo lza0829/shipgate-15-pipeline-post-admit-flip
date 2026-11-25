@@ -42,14 +42,20 @@ export default function Promote() {
       </div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>发版单号</th><th>应用</th><th>目标版本</th><th>状态</th><th>当前环境</th></tr></thead>
+          <thead><tr><th>发版单号</th><th>应用</th><th>目标版本</th><th>状态</th><th>当前环境</th><th>流水线</th><th>冻结</th></tr></thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.编号}><td>{r.发版单号}</td><td>{r.应用}</td><td>{r.目标版本}</td><td>{r.状态}</td><td>{r.当前环境}</td></tr>
+              <tr key={r.编号} className={r.冻结 ? 'row-frozen' : ''}>
+                <td>{r.发版单号}</td><td>{r.应用}</td><td>{r.目标版本}</td><td>{r.状态}</td>
+                <td>{r.当前环境}</td>
+                <td><span className={`lamp lamp-${r.流水线}`}>{r.流水线}</span></td>
+                <td>{r.冻结 ? <span className="tag tag-frozen">已冻结·禁止推进</span> : '-'}</td>
+              </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <p className="muted">臂一「翻红即冻结」：入闸后流水线翻红的发版单整笔拒绝晋升，在途保留但不得向更高环境推进；拒绝原因会写入晋升事件与审计。</p>
     </div>
   )
 }

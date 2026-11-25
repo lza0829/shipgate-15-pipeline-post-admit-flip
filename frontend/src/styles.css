@@ -228,6 +228,39 @@ th {
 }
 tr:hover td { background: #f2f4f7; }
 
+/* 流水线灯色 */
+.lamp {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid var(--line);
+}
+.lamp-绿 { background: #e3f4ec; color: var(--ok); border-color: var(--ok); }
+.lamp-红 { background: #fbe3e0; color: var(--danger); border-color: var(--danger); }
+.lamp-未回执 { background: #eef1f5; color: var(--muted); }
+
+/* 冻结标 + 冻结行：入闸后翻红在总览/发版单/晋升/对账同刷 */
+.tag {
+  display: inline-block;
+  padding: 0.12rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tag-frozen {
+  background: var(--danger);
+  color: #fff;
+  border: 1px solid #9a2e22;
+}
+tr.row-frozen td { background: #fbe9e7; }
+tr.row-frozen:hover td { background: #f6dedb; }
+
+.stat-frozen { border-bottom-color: var(--danger); }
+.stat-frozen .n { color: var(--danger); }
+.stat-reject { border-bottom-color: #b7791f; }
+.stat-reject .n { color: #b7791f; }
+
 @media (max-width: 860px) {
   .shell { grid-template-columns: 1fr; }
   .rail {

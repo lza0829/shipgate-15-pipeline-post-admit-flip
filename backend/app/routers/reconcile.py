@@ -40,8 +40,47 @@ def reconcile():
             ).fetchall()
         )
         promote_count = conn.execute("SELECT COUNT(*) AS c FROM promote_events").fetchone()["c"]
+        rejected_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM promote_events WHERE decision='拒绝'"
+        ).fetchone()["c"]
+        frozen_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM releases WHERE frozen=1"
+        ).fetchone()["c"]
+        frozen_list = rows_to_list(
+            conn.execute(
+                """
+                SELECT r.id AS 编号, r.serial AS 发版单号, a.name AS 应用,
+                       r.status AS 状态, r.pipeline_status AS 流水线,
+                       r.pipeline_snapshot_at_admit AS 入闸流水线快照,
+                       r.red_after_admit_at AS 入闸后翻红时间,
+                       e.code AS 当前环境
+                FROM releases r
+                JOIN apps a ON a.id = r.app_id
+                LEFT JOIN environments e ON e.id = r.current_env_id
+                WHERE r.frozen=1
+                ORDER BY r.red_after_admit_at, r.id
+                """
+            ).fetchall()
+        )
+        rejection_list = rows_to_list(
+            conn.execute(
+                """
+                SELECT p.id AS 编号, r.serial AS 发版单号, e.code AS 目标环境,
+                       p.created_at AS 时间, p.note AS 拒因
+                FROM promote_events p
+                JOIN releases r ON r.id = p.release_id
+                LEFT JOIN environments e ON e.id = p.to_env_id
+                WHERE p.decision='拒绝'
+                ORDER BY p.id DESC
+                """
+            ).fetchall()
+        )
         return {
             "发版统计": release_stats,
             "晋升事件数": promote_count,
+            "晋升拒绝数": rejected_count,
+            "冻结数": frozen_count,
+            "冻结清单": frozen_list,
+            "晋升拒绝清单": rejection_list,
             "名册与实例": version_vs_instance,
         }

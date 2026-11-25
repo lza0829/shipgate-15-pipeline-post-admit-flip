@@ -16,14 +16,22 @@ export default function Overview() {
         {Object.entries(d).map(([k, v]) => (
           <div className="stat" key={k}><div className="n">{v}</div><div className="l">{k}</div></div>
         ))}
+        <div className="stat stat-frozen"><div className="n">{data.冻结数 ?? 0}</div><div className="l">冻结（入闸后翻红）</div></div>
       </div>
       <h2>在途发版</h2>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>发版单号</th><th>应用</th><th>目标版本</th><th>状态</th><th>当前环境</th><th>流水线</th></tr></thead>
+          <thead><tr><th>发版单号</th><th>应用</th><th>目标版本</th><th>状态</th><th>当前环境</th><th>流水线</th><th>入闸快照</th><th>冻结</th><th>入闸后翻红时间</th></tr></thead>
           <tbody>
             {(data.在途 || []).map((r) => (
-              <tr key={r.编号}><td>{r.发版单号}</td><td>{r.应用}</td><td>{r.目标版本}</td><td>{r.状态}</td><td>{r.当前环境 || '-'}</td><td>{r.流水线}</td></tr>
+              <tr key={r.编号} className={r.冻结 ? 'row-frozen' : ''}>
+                <td>{r.发版单号}</td><td>{r.应用}</td><td>{r.目标版本}</td><td>{r.状态}</td>
+                <td>{r.当前环境 || '-'}</td>
+                <td><span className={`lamp lamp-${r.流水线}`}>{r.流水线}</span></td>
+                <td>{r.入闸流水线快照 || '-'}</td>
+                <td>{r.冻结 ? <span className="tag tag-frozen">已冻结</span> : '-'}</td>
+                <td>{r.入闸后翻红时间 || '-'}</td>
+              </tr>
             ))}
           </tbody>
         </table>
